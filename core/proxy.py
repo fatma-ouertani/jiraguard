@@ -19,11 +19,13 @@ from groq import Groq
 
 from core.trace_store import TraceStore, Step, db
 from agent.mock_jira import MockJiraAPI
+from core.analyzer import RootCauseAnalyzer
 
 app = FastAPI(title="JiraGuard Proxy", version="1.0")
 groq_client = Groq()
 GROQ_MODEL = "llama-3.1-8b-instant"
 jira = MockJiraAPI()
+analyzer = RootCauseAnalyzer()
 
 
 # ── ÉTAT GLOBAL DU PROXY ────────────────────────────────────────────────────
@@ -281,6 +283,29 @@ def get_diff(run_id: str, whatif_run_id: str):
 @app.get("/stats")
 def get_stats():
     return db.get_stats()
+
+
+# ── ROOT CAUSE ANALYSIS ──────────────────────────────────────────────────────
+
+@app.get("/analyze/{run_id}")
+def analyze_run(run_id: str,
+                wrong_team: str = "frontend",
+                wrong_priority: str = "high",
+                expected_team: str = "backend",
+                expected_priority: str = "critical"):
+    """Analyse la cause racine d'une mauvaise décision dans un run."""
+    result = analyzer.analyze_run(
+        run_id=run_id,
+        wrong_decision={"team": wrong_team, "priority": wrong_priority},
+        expected_decision={"team": expected_team, "priority": expected_priority},
+    )
+    return result
+
+@app.get("/analyze/diff/{original_id}/{whatif_id}")
+def analyze_diff(original_id: str, whatif_id: str):
+    """Analyse automatiquement toutes les corrections d'un diff What-If."""
+    result = analyzer.analyze_diff(original_id, whatif_id)
+    return result
 
 
 # ── UI ROUTER ────────────────────────────────────────────────────────────────

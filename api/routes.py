@@ -369,6 +369,89 @@ def ui_diff(original_id: str, whatif_id: str):
           </div>
         </div>"""
 
+    # Section Root Cause Analysis
+    rca_section = f"""
+    <div style="margin-top:28px">
+      <h2 style="font-size:16px;color:#94A3B8;margin-bottom:12px">
+        Root Cause Analysis
+        <span style="font-size:12px;color:#475569;font-weight:400;margin-left:8px">
+          powered by Groq llama-3.1-8b-instant
+        </span>
+      </h2>
+      <div style="background:#0F172A;border:1px solid #2563EB;border-radius:10px;
+                  padding:16px;font-size:13px">
+        <div id="rca-loading" style="color:#64748B">
+          Chargement de l'analyse...
+        </div>
+        <div id="rca-content" style="display:none">
+          <div id="rca-root-cause"
+               style="color:#F1F5F9;font-size:14px;font-weight:500;margin-bottom:12px">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+            <div>
+              <div style="font-size:11px;color:#475569;margin-bottom:4px">FAILURE TYPE</div>
+              <div id="rca-type"
+                   style="background:#1E293B;border-radius:6px;
+                          padding:6px 10px;color:#F59E0B;font-size:12px">
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:#475569;margin-bottom:4px">CONFIDENCE</div>
+              <div id="rca-confidence"
+                   style="background:#1E293B;border-radius:6px;
+                          padding:6px 10px;color:#10B981;font-size:12px">
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:12px">
+            <div style="font-size:11px;color:#475569;margin-bottom:4px">EVIDENCE</div>
+            <div id="rca-evidence"
+                 style="background:#1E293B;border:1px solid #334155;border-radius:6px;
+                        padding:8px 10px;color:#94A3B8;font-size:12px;
+                        font-family:monospace;white-space:pre-wrap">
+            </div>
+          </div>
+          <div style="margin-top:12px">
+            <div style="font-size:11px;color:#475569;margin-bottom:4px">
+              FIX RECOMMENDATION
+            </div>
+            <div id="rca-fix"
+                 style="background:#0D2E20;border:1px solid #10B981;border-radius:6px;
+                        padding:8px 10px;color:#10B981;font-size:13px">
+            </div>
+          </div>
+        </div>
+        <div id="rca-error" style="display:none;color:#EF4444;font-size:13px"></div>
+      </div>
+    </div>
+    <script>
+    fetch('/analyze/diff/{original_id}/{whatif_id}')
+      .then(r => r.json())
+      .then(data => {{
+        document.getElementById('rca-loading').style.display = 'none';
+        if (data.error || !data.analyses || data.analyses.length === 0) {{
+          document.getElementById('rca-error').style.display = 'block';
+          document.getElementById('rca-error').textContent =
+            data.message || data.error || 'No analysis available.';
+          return;
+        }}
+        const a = data.analyses[0];
+        document.getElementById('rca-content').style.display = 'block';
+        document.getElementById('rca-root-cause').textContent =
+          'Root cause: ' + a.root_cause;
+        document.getElementById('rca-type').textContent     = a.failure_type;
+        document.getElementById('rca-confidence').textContent =
+          Math.round(a.confidence * 100) + '% confidence';
+        document.getElementById('rca-evidence').textContent  = a.evidence;
+        document.getElementById('rca-fix').textContent       = a.fix_recommendation;
+      }})
+      .catch(e => {{
+        document.getElementById('rca-loading').style.display = 'none';
+        document.getElementById('rca-error').style.display   = 'block';
+        document.getElementById('rca-error').textContent     = 'Analysis failed: ' + e;
+      }});
+    </script>"""
+
     body = f"""
     <div style="margin-bottom:20px">
       <a href="/ui/runs" style="color:#64748B;text-decoration:none;font-size:13px">Tous les runs</a>
@@ -384,6 +467,7 @@ def ui_diff(original_id: str, whatif_id: str):
     <div style="margin-top:20px;display:flex;gap:10px">
       <a href="/ui/runs/{original_id}" class="btn">Voir run original</a>
       <a href="/ui/runs/{whatif_id}" class="btn" style="background:#10B981">Voir run What-If</a>
-    </div>"""
+    </div>
+    {rca_section}"""
 
     return HTMLResponse(_html_page("Diff", body))

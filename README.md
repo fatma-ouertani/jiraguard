@@ -174,6 +174,22 @@ Agent re-routes JSM-001 → `backend / critical`.
 
 ---
 
+## Screenshots
+
+### Run list — all recorded runs with status and step count
+![Run list](docs/screenshots/01_runs_list.png)
+
+### Step timeline — every LLM call and tool call inspectable
+![Timeline](docs/screenshots/02_run_timeline.png)
+
+### Step detail — exact prompt and response at each step
+![Step detail](docs/screenshots/03_step_detail.png)
+
+### What-If diff — JSM-001 corrected from frontend/high to backend/critical
+![Diff view](docs/screenshots/04_diff_view.png)
+
+---
+
 ## Evaluation Metric
 
 **Replay Determinism Rate** — the primary metric:
