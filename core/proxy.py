@@ -10,9 +10,10 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import asyncio
 from datetime import datetime, timezone
-from typing import Optional
-from fastapi import FastAPI, HTTPException
+from typing import Optional, List
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from groq import Groq
@@ -26,6 +27,56 @@ groq_client = Groq()
 GROQ_MODEL = "llama-3.1-8b-instant"
 jira = MockJiraAPI()
 analyzer = RootCauseAnalyzer()
+
+
+# ── WEBSOCKET — temps réel ───────────────────────────────────────────────────
+
+class ConnectionManager:
+    def __init__(self):
+        self.active: List[WebSocket] = []
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.active.append(ws)
+
+    def disconnect(self, ws: WebSocket):
+        if ws in self.active:
+            self.active.remove(ws)
+
+    async def broadcast(self, data: dict):
+        import json
+        msg = json.dumps(data, ensure_ascii=False, default=str)
+        dead = []
+        for ws in self.active:
+            try:
+                await ws.send_text(msg)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+ws_manager = ConnectionManager()
+
+# La boucle d'événements du serveur, capturée au démarrage.
+# Nécessaire car save_step/set_mode tournent dans un thread du threadpool
+# (endpoints sync) et ne peuvent pas planifier de coroutine sur la boucle
+# sans run_coroutine_threadsafe.
+_main_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+@app.on_event("startup")
+async def _capture_loop():
+    global _main_loop
+    _main_loop = asyncio.get_running_loop()
+
+
+def _schedule_broadcast(data: dict):
+    """Planifie un broadcast WebSocket depuis un contexte sync (threadpool)."""
+    try:
+        if _main_loop and _main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(ws_manager.broadcast(data), _main_loop)
+    except Exception:
+        pass
 
 
 # ── ÉTAT GLOBAL DU PROXY ────────────────────────────────────────────────────
@@ -70,7 +121,8 @@ class SetModeRequest(BaseModel):
 
 # ── HELPER : sauvegarder un step ────────────────────────────────────────────
 
-def save_step(step_type: str, input_payload: dict, output_payload: dict,
+def save_step(step_type: str, input_payload: dict,
+              output_payload: dict,
               latency_ms: int = 0, injected: bool = False):
     if not state.current_run_id:
         return
@@ -86,6 +138,50 @@ def save_step(step_type: str, input_payload: dict, output_payload: dict,
         injected=injected,
     )
     db.save_step(step)
+    _schedule_broadcast({
+        "type": "step",
+        "run_id": state.current_run_id,
+        "mode": state.mode,
+        "step": {
+            "id": step.id,
+            "step_number": step.step_number,
+            "step_type": step.step_type,
+            "latency_ms": step.latency_ms,
+            "injected": step.injected,
+            "timestamp": step.timestamp,
+            "output_preview": _preview(output_payload, step_type),
+        }
+    })
+
+
+def _preview(payload: dict, step_type: str) -> str:
+    if step_type == "llm_call":
+        content = payload.get("content", "")
+        return content[:100] if content else ""
+    elif step_type == "tool_call":
+        team = payload.get("team", "")
+        prio = payload.get("priority", "")
+        tid  = payload.get("ticket_id", "")
+        return f"{tid} → {team}/{prio}" if team else ""
+    return ""
+
+
+# ── WEBSOCKET ENDPOINT ───────────────────────────────────────────────────────
+
+@app.websocket("/ws/live")
+async def websocket_live(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    try:
+        await websocket.send_json({
+            "type": "connected",
+            "mode": state.mode,
+            "run_id": state.current_run_id,
+        })
+        while True:
+            await asyncio.sleep(30)
+            await websocket.send_json({"type": "ping"})
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
 
 
 # ── ENDPOINTS DE CONTRÔLE ────────────────────────────────────────────────────
@@ -117,6 +213,7 @@ def set_mode(req: SetModeRequest):
         state.mode = "RECORD"
         state.current_run_id = run.id
         print(f"[PROXY] Mode RECORD — run_id={run.id}")
+        _schedule_broadcast({"type": "mode_change", "mode": req.mode, "run_id": state.current_run_id})
         return {"mode": "RECORD", "run_id": run.id}
 
     elif req.mode == "REPLAY":
@@ -129,6 +226,7 @@ def set_mode(req: SetModeRequest):
         state.replay_steps = steps
         state.current_run_id = req.run_id
         print(f"[PROXY] Mode REPLAY — run_id={req.run_id} ({len(steps)} steps chargés)")
+        _schedule_broadcast({"type": "mode_change", "mode": req.mode, "run_id": state.current_run_id})
         return {"mode": "REPLAY", "run_id": req.run_id, "steps_loaded": len(steps)}
 
     elif req.mode == "WHATIF":
@@ -149,6 +247,7 @@ def set_mode(req: SetModeRequest):
         state.whatif_injection_step = req.injection_step
         state.whatif_injection = req.injection
         print(f"[PROXY] Mode WHATIF — original={req.run_id} whatif={whatif_run.id} inject@step={req.injection_step}")
+        _schedule_broadcast({"type": "mode_change", "mode": req.mode, "run_id": state.current_run_id})
         return {
             "mode": "WHATIF",
             "original_run_id": req.run_id,
