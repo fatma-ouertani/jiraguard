@@ -123,13 +123,14 @@ class SetModeRequest(BaseModel):
 
 def save_step(step_type: str, input_payload: dict,
               output_payload: dict,
-              latency_ms: int = 0, injected: bool = False):
+              latency_ms: int = 0, injected: bool = False,
+              step_number: int = None):
     if not state.current_run_id:
         return
-    state.step_counter += 1
+    sn = step_number or state.step_counter
     step = Step(
         run_id=state.current_run_id,
-        step_number=state.step_counter,
+        step_number=sn,
         step_type=step_type,
         input_payload=input_payload,
         output_payload=output_payload,
@@ -295,7 +296,7 @@ def proxy_llm(req: LLMRequest):
                 output = _call_groq(injected_system, req.messages, req.model, req.max_tokens)
                 save_step("llm_call",
                     {"system": injected_system[:100] + "...", "messages": req.messages, "injected": True},
-                    output, injected=True)
+                    output, injected=True, step_number=current_step)
                 return output
             else:
                 # Avant injection : replay depuis cache
@@ -306,7 +307,7 @@ def proxy_llm(req: LLMRequest):
                     print(f"  [PROXY WHATIF] step {current_step} llm_call → cache (avant injection)")
                     save_step("llm_call",
                         {"system": req.system[:100] + "...", "messages": req.messages},
-                        cached.output_payload)
+                        cached.output_payload, step_number=current_step)
                     return cached.output_payload
 
     # ── MODE RECORD (ou WHATIF après injection) ──────────────────────────────
@@ -316,7 +317,7 @@ def proxy_llm(req: LLMRequest):
     print(f"  [PROXY RECORD] step {current_step} llm_call → API réelle ({latency}ms)")
     save_step("llm_call",
         {"system": req.system[:100] + "...", "messages": req.messages, "model": req.model},
-        output, latency_ms=latency)
+        output, latency_ms=latency, step_number=current_step)
     return output
 
 
@@ -350,13 +351,13 @@ def proxy_jira_assign(req: JiraAssignRequest):
             state.replay_cursor += 1
             print(f"  [PROXY REPLAY] step {current_step} jira/assign {req.ticket_id} → cache (pas de vrai appel)")
             if state.mode == "WHATIF":
-                save_step("tool_call", req.model_dump(), cached.output_payload)
+                save_step("tool_call", req.model_dump(), cached.output_payload, step_number=current_step)
             return cached.output_payload
 
     # ── MODE RECORD ou WHATIF après injection ─────────────────────────────────
     result = jira.assign_ticket(req.ticket_id, req.team, req.priority)
     print(f"  [PROXY RECORD] step {current_step} jira/assign {req.ticket_id} → {req.team}/{req.priority}")
-    save_step("tool_call", req.model_dump(), result)
+    save_step("tool_call", req.model_dump(), result, step_number=current_step)
     return result
 
 

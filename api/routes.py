@@ -643,7 +643,12 @@ def ui_run_detail(run_id: str):
             injected = f'<span class="injected-badge">INJECTED</span>' if step.injected else ""
             inp  = json.dumps(step.input_payload,  ensure_ascii=False, indent=2)
             out  = json.dumps(step.output_payload, ensure_ascii=False, indent=2)
-            latency = f"{step.latency_ms}ms" if step.latency_ms else "cache"
+            if step.latency_ms and step.latency_ms > 0:
+                latency = f"{step.latency_ms}ms"
+            elif step.step_type == "tool_call":
+                latency = "mock API"
+            else:
+                latency = "cached"
 
             preview = ""
             if step.step_type == "llm_call":
