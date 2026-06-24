@@ -582,8 +582,10 @@ def ui_runs():
         cards = ""
         for run in runs:
             diff_btn = ""
+            metrics_btn = ""
             if run.mode == "WHATIF" and run.parent_run_id:
                 diff_btn = f'&nbsp;&nbsp;<a href="/ui/diff/{run.parent_run_id}/{run.id}" class="btn btn-sm btn-green">View diff</a>'
+                metrics_btn = f'&nbsp;<a href="/ui/metrics/{run.parent_run_id}?whatif_id={run.id}" class="btn btn-sm" style="background:#7C3AED">Metrics</a>'
             parent_info = ""
             if run.parent_run_id:
                 parent_info = f'&nbsp;&nbsp;<span class="meta">parent: <a href="/ui/runs/{run.parent_run_id}" style="color:#94A3B8;font-size:12px">{run.parent_run_id}</a></span>'
@@ -596,6 +598,7 @@ def ui_runs():
                 {_badge_status(run.status)}
                 <span class="steps-pill">{run.total_steps} steps</span>
                 {diff_btn}
+                {metrics_btn}
                 <span style="margin-left:auto" class="meta">{run.started_at[:16].replace('T',' ')}</span>
               </div>
               <div class="card-body" style="padding:10px 20px;display:flex;gap:12px;align-items:center">
@@ -1072,3 +1075,120 @@ def ui_diff(original_id: str, whatif_id: str):
     </script>"""
 
     return HTMLResponse(_page("Diff", body))
+
+
+@router.get("/metrics/{record_id}", response_class=HTMLResponse)
+def ui_metrics(record_id: str, whatif_id: str = None):
+
+    import requests as req
+    url = f"http://localhost:8000/metrics/{record_id}"
+    if whatif_id:
+        url += f"?whatif_id={whatif_id}"
+
+    try:
+        data = req.get(url, timeout=60).json()
+        summary = data.get("summary", {})
+        m1 = data.get("m1_triage_accuracy", {})
+        m2 = data.get("m2_replay_fidelity", {})
+        m3 = data.get("m3_whatif_improvement", {})
+        m4 = data.get("m4_step_quality", {})
+        m5 = data.get("m5_side_effect_prevention", {})
+        m6 = data.get("m6_rca_confidence", {})
+    except Exception as e:
+        body = f'<div class="alert-info">Error loading metrics: {e}</div>'
+        return HTMLResponse(_page("Metrics", body))
+
+    def pct(v):
+        try:
+            return f"{round(float(v)*100)}%"
+        except Exception:
+            return "N/A"
+
+    def color(v, good=0.7):
+        try:
+            f = float(v)
+            if f >= good:
+                return "#15803D"
+            elif f >= 0.5:
+                return "#B45309"
+            return "#DC2626"
+        except Exception:
+            return "#64748B"
+
+    cards = [
+        ("M1", "Triage Accuracy",
+         pct(m1.get("overall_accuracy",0)),
+         f"Team: {pct(m1.get('team_accuracy',0))} · "
+         f"Priority: {pct(m1.get('priority_accuracy',0))}",
+         color(m1.get("overall_accuracy",0))),
+
+        ("M2", "Replay Fidelity",
+         pct(m2.get("replay_fidelity_score",1.0)),
+         f"Steps compared: "
+         f"{m2.get('steps_compared','N/A')}",
+         color(m2.get("replay_fidelity_score",1.0))),
+
+        ("M3", "What-If Improvement",
+         f"+{pct(m3.get('improvement',0))}",
+         f"Original: {pct(m3.get('original_accuracy',0))} → "
+         f"Fixed: {pct(m3.get('whatif_accuracy',0))}",
+         "#15803D"),
+
+        ("M4", "Step Quality (AI eval)",
+         pct(m4.get("avg_confidence",0)),
+         f"Anomalies: {m4.get('anomalies_found',0)}/"
+         f"{m4.get('total_evaluated',0)}",
+         color(m4.get("avg_confidence",0))),
+
+        ("M5", "Side-Effect Prevention",
+         pct(m5.get("prevention_rate",1.0)),
+         f"Record calls: "
+         f"{m5.get('record_llm_calls',0)} · "
+         f"Replay calls: {m5.get('replay_llm_calls',0)}",
+         "#15803D"),
+
+        ("M6", "RCA Confidence",
+         pct(m6.get("avg_confidence",0)),
+         f"Failure types: "
+         f"{', '.join(m6.get('failure_types',[]) or ['N/A'])}",
+         color(m6.get("avg_confidence",0))),
+    ]
+
+    cards_html = ""
+    for mid, title, val, sub, col in cards:
+        cards_html += f"""
+        <div class="card" style="padding:20px">
+          <div style="font-size:11px;font-weight:700;color:#94A3B8;
+                      letter-spacing:.08em;text-transform:uppercase;
+                      margin-bottom:8px">{mid}</div>
+          <div style="font-size:13px;font-weight:600;color:#334155;
+                      margin-bottom:6px">{title}</div>
+          <div style="font-size:32px;font-weight:700;color:{col};
+                      margin-bottom:6px">{val}</div>
+          <div style="font-size:12px;color:#94A3B8">{sub}</div>
+        </div>"""
+
+    body = f"""
+    <div class="breadcrumb">
+      <a href="/ui/runs">All runs</a>
+      <span class="breadcrumb-sep">›</span>
+      <a href="/ui/runs/{record_id}">{record_id}</a>
+      <span class="breadcrumb-sep">›</span>
+      <span>Metrics</span>
+    </div>
+    <div class="page-title">Evaluation Dashboard</div>
+    <div class="page-sub">
+      6 metrics across 3 dimensions — powered by AI evaluation
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);
+                gap:14px;margin-bottom:28px">
+      {cards_html}
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <a href="/ui/runs/{record_id}" class="btn btn-outline">
+        View run
+      </a>
+      {"<a href='/ui/diff/"+record_id+"/"+whatif_id+"' class='btn btn-green'>View diff</a>" if whatif_id else ""}
+    </div>"""
+
+    return HTMLResponse(_page(f"Metrics — {record_id}", body))

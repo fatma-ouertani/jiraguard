@@ -29,6 +29,8 @@ from groq import Groq
 
 from core.trace_store import TraceStore, Step, db
 from core.analyzer import RootCauseAnalyzer
+from core.ai_evaluator import AIEvaluator
+from core.metrics import MetricsDashboard
 
 app = FastAPI(title="JiraGuard Proxy", version="1.0")
 groq_client = Groq()
@@ -41,6 +43,8 @@ else:
     from agent.mock_jira import MockJiraAPI as _JiraClass
 jira = _JiraClass()
 analyzer = RootCauseAnalyzer()
+ai_eval  = AIEvaluator()
+metrics  = MetricsDashboard()
 
 
 # ── WEBSOCKET — temps réel ───────────────────────────────────────────────────
@@ -442,6 +446,29 @@ def analyze_diff(original_id: str, whatif_id: str):
     """Analyse automatiquement toutes les corrections d'un diff What-If."""
     result = analyzer.analyze_diff(original_id, whatif_id)
     return result
+
+
+# ── AI EVALUATION & METRICS ──────────────────────────────────────────────────
+
+@app.get("/evaluate/{run_id}")
+def evaluate_run(run_id: str):
+    """Évalue chaque step d'un run avec l'IA."""
+    import json
+    from pathlib import Path
+    tickets = []
+    try:
+        with open(Path("data/tickets.json"), encoding="utf-8") as f:
+            tickets = json.load(f)
+    except Exception:
+        pass
+    return ai_eval.evaluate_run(run_id, tickets)
+
+@app.get("/metrics/{record_id}")
+def get_metrics(record_id: str,
+                whatif_id: str = None,
+                replay_id: str = None):
+    """Dashboard de métriques complet pour un run."""
+    return metrics.compute_all(record_id, whatif_id, replay_id)
 
 
 # ── UI ROUTER ────────────────────────────────────────────────────────────────
