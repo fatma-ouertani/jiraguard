@@ -10,7 +10,16 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Charge les variables d'un fichier .env local (gitignoré) si présent.
+# Permet de fournir JIRA_*/GROQ_API_KEY/USE_REAL_JIRA sans les exposer.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 import asyncio
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -19,13 +28,18 @@ from pydantic import BaseModel
 from groq import Groq
 
 from core.trace_store import TraceStore, Step, db
-from agent.mock_jira import MockJiraAPI
 from core.analyzer import RootCauseAnalyzer
 
 app = FastAPI(title="JiraGuard Proxy", version="1.0")
 groq_client = Groq()
 GROQ_MODEL = "llama-3.1-8b-instant"
-jira = MockJiraAPI()
+
+import os as _os
+if _os.environ.get("USE_REAL_JIRA", "").lower() == "true":
+    from agent.real_jira import RealJiraClient as _JiraClass
+else:
+    from agent.mock_jira import MockJiraAPI as _JiraClass
+jira = _JiraClass()
 analyzer = RootCauseAnalyzer()
 
 
@@ -355,7 +369,29 @@ def proxy_jira_assign(req: JiraAssignRequest):
             return cached.output_payload
 
     # ── MODE RECORD ou WHATIF après injection ─────────────────────────────────
-    result = jira.assign_ticket(req.ticket_id, req.team, req.priority)
+    if hasattr(jira, 'update_labels'):
+        jira_map_path = Path("data/jira_ticket_map.json")
+        if jira_map_path.exists():
+            import json as _json
+            jira_map = _json.loads(jira_map_path.read_text())
+            mapped = jira_map.get(req.ticket_id, {})
+            jira_key = mapped.get("jira_key")
+            if jira_key:
+                result = jira.update_labels(jira_key, req.team, req.priority)
+                result["ticket_id"] = req.ticket_id
+                result["team"]      = req.team
+                result["priority"]  = req.priority
+                result["jira_url"]  = mapped.get("url", "")
+            else:
+                result = {"success": True, "ticket_id": req.ticket_id,
+                          "team": req.team, "priority": req.priority,
+                          "mock": True}
+        else:
+            result = {"success": True, "ticket_id": req.ticket_id,
+                      "team": req.team, "priority": req.priority,
+                      "mock": True}
+    else:
+        result = jira.assign_ticket(req.ticket_id, req.team, req.priority)
     print(f"  [PROXY RECORD] step {current_step} jira/assign {req.ticket_id} → {req.team}/{req.priority}")
     save_step("tool_call", req.model_dump(), result, step_number=current_step)
     return result

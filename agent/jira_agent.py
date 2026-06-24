@@ -15,6 +15,13 @@ import requests as req
 from pathlib import Path
 from groq import Groq
 
+# Charge un .env local (gitignoré) si présent.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 TICKETS_PATH = Path(__file__).parent.parent / "data" / "tickets.json"
 GROQ_MODEL   = "llama-3.1-8b-instant"
 

@@ -1,0 +1,82 @@
+{
+  "JSM-001": {
+    "jira_key": "JG-1",
+    "url": "https://esprit-team-i10aifzi.atlassian.net//browse/JG-1",
+    "local_id": "JSM-001",
+    "expected_team": "backend",
+    "expected_priority": "critical",
+    "title": "Erreur 500 sur /api/payments en production"
+  },
+  "JSM-002": {
+    "jira_key": "JG-2",
+    "url": "https://esprit-team-i10aifzi.atlassian.net//browse/JG-2",
+    "local_id": "JSM-002",
+    "expected_team": "frontend",
+    "expected_priority": "high",
+    "title": "Bouton de connexion ne répond pas sur mobile Safari"
+  },
+  "JSM-003": {
+    "jira_key": "JG-3",
+    "url": "https://esprit-team-i10aifzi.atlassian.net//browse/JG-3",
+    "local_id": "JSM-003",
+    "expected_team": "infra",
+    "expected_priority": "critical",
+    "title": "Base de données principale saturée à 95%"
+  },
+  "JSM-004": {
+    "jira_key": "JG-4",
+    "url": "https://esprit-team-i10aifzi.atlassian.net//browse/JG-4",
+    "local_id": "JSM-004",
+    "expected_team": "frontend",
+    "expected_priority": "medium",
+    "title": "CSS cassé sur la page de profil utilisateur"
+  },
+  "JSM-005": {
+    "jira_key": "JG-5",
+    "url": "https://esprit-team-i10aifzi.atlassian.net//browse/JG-5",
+    "local_id": "JSM-005",
+    "expected_team": "backend",
+    "expected_priority": "high",
+    "title": "API /api/users retourne des données corrompues"
+  },
+  "JSM-006": {
+    "jira_key": "JG-6",
+    "url": "https://esprit-team-i10aifzi.atlassian.net//browse/JG-6",
+    "local_id": "JSM-006",
+    "expected_team": "infra",
+    "expected_priority": "critical",
+    "title": "Certificat SSL expire dans 3 jours"
+  },
+  "JSM-007": {
+    "jira_key": "JG-7",
+    "url": "https://esprit-team-i10aifzi.atlassian.net//browse/JG-7",
+    "local_id": "JSM-007",
+    "expected_team": "frontend",
+    "expected_priority": "low",
+    "title": "Ajouter un filtre de date dans le dashboard"
+  },
+  "JSM-008": {
+    "jira_key": "JG-8",
+    "url": "https://esprit-team-i10aifzi.atlassian.net//browse/JG-8",
+    "local_id": "JSM-008",
+    "expected_team": "backend",
+    "expected_priority": "high",
+    "title": "Endpoint /api/reports génère des timeouts après 30s"
+  },
+  "JSM-009": {
+    "jira_key": "JG-9",
+    "url": "https://esprit-team-i10aifzi.atlassian.net//browse/JG-9",
+    "local_id": "JSM-009",
+    "expected_team": "infra",
+    "expected_priority": "critical",
+    "title": "Kubernetes pods en CrashLoopBackOff depuis 2h"
+  },
+  "JSM-010": {
+    "jira_key": "JG-10",
+    "url": "https://esprit-team-i10aifzi.atlassian.net//browse/JG-10",
+    "local_id": "JSM-010",
+    "expected_team": "frontend",
+    "expected_priority": "medium",
+    "title": "Formulaire d'inscription ne valide pas les emails"
+  }
+}

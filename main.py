@@ -19,6 +19,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agent.jira_agent import JiraAgent, load_tickets
 from agent.mock_jira  import MockJiraAPI
 
+from dotenv import load_dotenv
+load_dotenv()
+
 PROXY_URL = "http://localhost:8000"
 
 
