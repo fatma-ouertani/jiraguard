@@ -190,6 +190,26 @@ Agent re-routes JSM-001 → `backend / critical`.
 
 ---
 
+## Dataset
+
+JiraGuard evaluates agent decisions against a synthetic
+dataset of 10 Jira-style incident tickets.
+
+| Field | Values |
+|-------|--------|
+| Source | 100% synthetic — no real data, no PII |
+| Format | JSON array (`data/tickets.json`) |
+| Size | 10 tickets |
+| Teams | `backend` (3) · `frontend` (4) · `infra` (3) |
+| Priorities | `critical` (4) · `high` (3) · `medium` (2) · `low` (1) |
+| Ground truth | `expected_team` + `expected_priority` per ticket |
+| Atlassian | Mapped to real Jira Cloud tickets (JG-1..JG-10) |
+
+All emails use fictional `@acme.com` domain.
+Full schema and quality notes: [`data/DATA_DESCRIPTION.md`](data/DATA_DESCRIPTION.md)
+
+---
+
 ## Evaluation Metric
 
 **Replay Determinism Rate** — the primary metric:
