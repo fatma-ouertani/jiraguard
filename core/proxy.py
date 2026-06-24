@@ -241,12 +241,22 @@ def set_mode(req: SetModeRequest):
         steps = db.get_steps(req.run_id)
         if not steps:
             raise HTTPException(404, f"Aucun step pour run {req.run_id}")
+        replay_run = db.create_run(
+            mode="REPLAY",
+            agent_version="1.0-replay",
+            parent_run_id=req.run_id,
+        )
         state.mode = "REPLAY"
         state.replay_steps = steps
-        state.current_run_id = req.run_id
-        print(f"[PROXY] Mode REPLAY — run_id={req.run_id} ({len(steps)} steps chargés)")
+        state.current_run_id = replay_run.id
+        print(f"[PROXY] Mode REPLAY — original={req.run_id} replay={replay_run.id}")
         _schedule_broadcast({"type": "mode_change", "mode": req.mode, "run_id": state.current_run_id})
-        return {"mode": "REPLAY", "run_id": req.run_id, "steps_loaded": len(steps)}
+        return {
+            "mode": "REPLAY",
+            "original_run_id": req.run_id,
+            "replay_run_id": replay_run.id,
+            "steps_loaded": len(steps)
+        }
 
     elif req.mode == "WHATIF":
         if not req.run_id or req.injection_step is None or not req.injection:
@@ -299,6 +309,9 @@ def proxy_llm(req: LLMRequest):
             cached = state.replay_steps[idx]
             state.replay_cursor += 1
             print(f"  [PROXY REPLAY] step {current_step} llm_call → depuis cache")
+            save_step("llm_call",
+                {"system": req.system[:100] + "...", "messages": req.messages, "replayed": True},
+                cached.output_payload, step_number=current_step)
             return cached.output_payload
         else:
             print(f"  [PROXY REPLAY] step {current_step} — plus de cache, appel réel")
@@ -368,8 +381,8 @@ def proxy_jira_assign(req: JiraAssignRequest):
             cached = state.replay_steps[idx]
             state.replay_cursor += 1
             print(f"  [PROXY REPLAY] step {current_step} jira/assign {req.ticket_id} → cache (pas de vrai appel)")
-            if state.mode == "WHATIF":
-                save_step("tool_call", req.model_dump(), cached.output_payload, step_number=current_step)
+            # Sauvegarde le step rejoué dans le run courant (REPLAY ou WHATIF avant injection)
+            save_step("tool_call", req.model_dump(), cached.output_payload, step_number=current_step)
             return cached.output_payload
 
     # ── MODE RECORD ou WHATIF après injection ─────────────────────────────────

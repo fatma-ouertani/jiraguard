@@ -1081,12 +1081,29 @@ def ui_diff(original_id: str, whatif_id: str):
 def ui_metrics(record_id: str, whatif_id: str = None):
 
     import requests as req
-    url = f"http://localhost:8000/metrics/{record_id}"
+    from core.trace_store import db as _db
+    params = {}
     if whatif_id:
-        url += f"?whatif_id={whatif_id}"
+        params["whatif_id"] = whatif_id
+
+    # Cherche un run REPLAY lié à ce run RECORD
+    all_runs = _db.list_runs(limit=50)
+    replay_run = next(
+        (r for r in all_runs
+         if r.mode == "REPLAY"
+         and r.parent_run_id == record_id),
+        None
+    )
+    if replay_run:
+        params["replay_id"] = replay_run.id
+
+    import urllib.parse
+    url = f"http://localhost:8000/metrics/{record_id}"
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
 
     try:
-        data = req.get(url, timeout=60).json()
+        data = req.get(url, timeout=120).json()
         summary = data.get("summary", {})
         m1 = data.get("m1_triage_accuracy", {})
         m2 = data.get("m2_replay_fidelity", {})

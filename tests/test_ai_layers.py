@@ -1,10 +1,16 @@
-import sys, os
+import sys, os, tempfile
 sys.path.insert(0, os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))
 ))
 if sys.stdout.encoding and \
    sys.stdout.encoding.lower() != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
+_tmp_db = tempfile.NamedTemporaryFile(
+    suffix='.db', delete=False
+)
+_tmp_db.close()
+os.environ['JIRAGUARD_DB_PATH'] = _tmp_db.name
 
 from dotenv import load_dotenv
 load_dotenv()
