@@ -63,7 +63,7 @@ class RealJiraClient:
     """Client Jira Cloud REST API v3."""
 
     def __init__(self):
-        self.base_url   = JIRA_BASE_URL
+        self.base_url   = JIRA_BASE_URL.rstrip('/')
         self.email      = JIRA_EMAIL
         self.api_token  = JIRA_API_TOKEN
         self.project_key = None

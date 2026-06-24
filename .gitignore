@@ -10,3 +10,4 @@ venv/
 .idea/
 .vscode/
 *.log
+data/jira_ticket_map.json
